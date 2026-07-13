@@ -14,13 +14,9 @@ meldet und bei dem das Flashen mit dem System-`dfu-util` (0.11) an
 1. **Das Board ist ab Werk read-protected (RDP Level 1).** Erst RDP entfernen, dann flashen.
    Der `ERASE_PAGE`-Fehler ist **kein** dfu-util-Bug, sondern die aktive Read-Protection.
 2. **Kein Bootloader** → Firmware auf **`0x08000000`** bauen/flashen (NICHT `0x08020000`).
-3. **12-MHz-Quarz** in der Klipper-Config wählen. Falscher Referenztakt (z. B. 8 MHz)
-   → die Firmware wird zwar korrekt geschrieben, der MCU bootet aber „dunkel"
-   (kein USB, weil der 48-MHz-USB-Takt nicht stimmt).
+3. **12-MHz-Quarz** in der Klipper-Config wählen. 
 
 > ⚠️ **RDP entfernen löscht den kompletten Flash (Mass-Erase).** Das ist hier gewollt.
-> **Niemals RDP Level 2 setzen** — das ist irreversibel (Brick). Level 2 ist hier aber
-> ausgeschlossen, solange sich das Board überhaupt im DFU-Modus meldet.
 
 ---
 
@@ -172,7 +168,7 @@ cmp ~/klipper/out/klipper.bin /tmp/readback.bin && echo "identisch"
 
 ## Schritt 7 — Prüfen & Klipper starten
 
-Nach dem Flashen (ggf. einmal **RESET ohne BOOT0** drücken) sollte der MCU als
+Nach dem Flashen (ggf. einmal **RESET ohne BOOT0** drücken, oder einmal stromlos machen) sollte der MCU als
 Klipper-USB-Gerät erscheinen:
 
 ```bash
@@ -191,6 +187,7 @@ tail -f ~/printer_data/logs/klippy.log
 Erfolg sichtbar an `Configured MCU 'mcu'` und laufenden `Stats`-Zeilen mit
 `freq=~400000000` (der korrekte 400-MHz-Takt dank 12-MHz-Referenz).
 
+Wahlweise auch einfach das ganze system inklusive Raspberry neu starten und schauen ob bei MCU in Klipper der kontakt besteht. 
 ---
 
 ## Häufige Stolpersteine
@@ -203,7 +200,7 @@ Erfolg sichtbar an `Configured MCU 'mcu'` und laufenden `Stats`-Zeilen mit
 | MCU bootet nicht, obwohl Firmware @0x08020000 | Kein Bootloader vorhanden → **No bootloader / 0x08000000** bauen. |
 | `LIBUSB_ERROR_PIPE` nach `:leave` / nach `unprotect` | **Harmlos** — Gerät hat sich zum Reset/Erase getrennt. |
 | Board flasht/enumeriert unzuverlässig | Stromversorgung prüfen (im Log tauchten „Undervoltage detected"-Warnungen des Pi auf). |
-
+| Drucke werden schief und krumm | STEP_PIN in der print.cfg muss invertiert werden (X/Y/Z) |
 ---
 
 *Getestet auf: Raspberry Pi OS (Bookworm, ARM64), STM32H743VI, `dfu-util 0.11-dev`, Klipper v0.13.*
@@ -218,8 +215,8 @@ AD595-Thermoelemente) braucht ein paar spezielle Einstellungen. Ohne die bewegen
 insbesondere die **Extruder nicht**. Hier die relevanten Teile, damit alles mit den
 **Originalteilen** funktioniert.
 
-> Hinweis: Pressure Advance ist hier bewusst **nicht** dokumentiert — die Druckköpfe sind
-> Sonderanfertigungen, die Werte sind nicht übertragbar.
+> Hinweis: Pressure Advance ist hier bewusst **nicht** dokumentiert — meine Druckköpfe sind
+> Sonderanfertigungen, die Werte sind daher nicht übertragbar.
 
 ## A) Pinbelegung der Steckerleisten (Referenz)
 
@@ -380,3 +377,55 @@ gcode:
 3. **Enable-Pin-Polung** korrekt? (Extruder **ohne** `!`, X/Y/Z **mit** `!`)
 4. Richtiger **Kopf per Servo** unten? (`SET_PIN PIN=extruder VALUE=0/1`)
 5. Wurde der Extruder **aktiviert**? (`ACTIVATE_EXTRUDER` bzw. `T0`/`T1`)
+
+### Kurz-Checkliste „Alle Drucke werden schief und Krumm"
+
+Pin Belegungen prüfen!!!
+```ini
+[stepper_x]
+step_pin = !PH11
+dir_pin = !PH7
+enable_pin = !PE15
+microsteps = 16
+rotation_distance = 40
+endstop_pin = ^PG0
+position_endstop = 0
+position_max = 305.0
+homing_speed = 90
+position_min = 0
+homing_retract_dist = 10
+second_homing_speed = 5.0
+homing_retract_speed = 90.0 #10
+
+
+[stepper_y]
+step_pin = !PH10
+dir_pin = !PH6
+enable_pin = !PE12
+microsteps = 16
+rotation_distance = 40
+endstop_pin = ^PG2  # PA2 for Y-max
+position_endstop = 0
+position_max = 305.0
+homing_speed = 90
+position_min = 0
+homing_retract_dist = 10
+second_homing_speed = 5.0
+homing_retract_speed = 90.0
+
+
+[stepper_z]
+step_pin = !PA3
+dir_pin = PH5
+enable_pin = !PE2
+microsteps = 16
+rotation_distance = 4
+endstop_pin = ^PG4
+position_min = -1
+#position_endstop = 0
+position_max = 605.0
+homing_retract_dist = 5
+homing_speed = 8
+second_homing_speed = 2.0
+
+```
